@@ -12,10 +12,14 @@ export async function GET(request) {
     [out:json][timeout:25];
     (
       node["social_facility"="food_bank"](around:${radius},${lat},${lng});
+      node["social_facility"="food_pantry"](around:${radius},${lat},${lng});
       node["social_facility"="shelter"](around:${radius},${lat},${lng});
-      node["amenity"="clinic"](around:${radius},${lat},${lng});
+      node["social_facility"="homeless_shelter"](around:${radius},${lat},${lng});
       node["social_facility"="employment_agency"](around:${radius},${lat},${lng});
-      node["amenity"="social_facility"](around:${radius},${lat},${lng});
+      node["social_facility"="outreach"](around:${radius},${lat},${lng});
+      node["amenity"="clinic"](around:${radius},${lat},${lng});
+      node["amenity"="community_centre"](around:${radius},${lat},${lng});
+      node["amenity"="food_bank"](around:${radius},${lat},${lng});
     );
     out body;
   `
@@ -28,18 +32,21 @@ export async function GET(request) {
 
     const data = await res.json()
 
-    const resources = data.elements.map((el, i) => ({
-      id: `osm-${el.id}`,
-      type: getType(el.tags),
-      name: el.tags.name || 'Unnamed Resource',
-      address: getAddress(el.tags),
-      hours: el.tags.opening_hours || 'Hours not listed',
-      phone: el.tags.phone || el.tags['contact:phone'] || 'Phone not listed',
-      lat: el.lat,
-      lng: el.lon,
-      open: true,
-      desc: el.tags.description || el.tags['social_facility'] || 'Community resource',
-    }))
+    // filter out anything we can't properly categorize
+    const resources = data.elements
+      .map(el => ({
+        id: `osm-${el.id}`,
+        type: getType(el.tags),
+        name: el.tags.name || 'Unnamed Resource',
+        address: getAddress(el.tags),
+        hours: el.tags.opening_hours || 'Hours not listed',
+        phone: el.tags.phone || el.tags['contact:phone'] || 'Phone not listed',
+        lat: el.lat,
+        lng: el.lon,
+        open: true,
+        desc: el.tags.description || el.tags['social_facility'] || el.tags['amenity'] || 'Community resource',
+      }))
+      .filter(r => r.type !== null) // remove anything we couldn't categorize
 
     return Response.json({ resources })
   } catch (err) {
@@ -48,11 +55,17 @@ export async function GET(request) {
 }
 
 function getType(tags) {
-  if (tags.social_facility === 'food_bank') return 'food'
-  if (tags.social_facility === 'shelter') return 'shelter'
-  if (tags.social_facility === 'employment_agency') return 'job'
-  if (tags.amenity === 'clinic') return 'clinic'
-  return 'food'
+  const sf = tags.social_facility
+  const amenity = tags.amenity
+
+  if (sf === 'food_bank' || sf === 'food_pantry' || amenity === 'food_bank') return 'food'
+  if (sf === 'shelter' || sf === 'homeless_shelter') return 'shelter'
+  if (sf === 'employment_agency') return 'job'
+  if (amenity === 'clinic') return 'clinic'
+  if (sf === 'outreach' || amenity === 'community_centre') return 'shelter'
+
+  // return null for anything we can't categorize — these get filtered out
+  return null
 }
 
 function getAddress(tags) {
