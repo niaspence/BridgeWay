@@ -71,6 +71,42 @@ export default function Map({ resources, onSelectResource, selectedId, mapCenter
     if (r) leafletMap.current.flyTo([r.lat, r.lng], 15)
   }, [selectedId])
 
+  // update markers when resources change
+useEffect(() => {
+  if (!leafletMap.current) return
+
+  import('leaflet').then(L => {
+    L = L.default
+
+    // remove all existing markers
+    Object.values(markersRef.current).forEach(marker => marker.remove())
+    markersRef.current = {}
+
+    // add new markers
+    resources.forEach(r => {
+      const color = typeColors[r.type]
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="
+          width:28px; height:28px;
+          border-radius:50% 50% 50% 0;
+          transform:rotate(-45deg);
+          background:${color};
+          border:2px solid rgba(255,255,255,0.3);
+          box-shadow:0 3px 10px rgba(0,0,0,0.4);
+        "></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+      })
+
+      const marker = L.marker([r.lat, r.lng], { icon })
+        .addTo(leafletMap.current)
+        .on('click', () => onSelectResource(r.id))
+
+      markersRef.current[r.id] = marker
+    })
+  })
+}, [resources])
   useEffect(() => {
     if (!leafletMap.current || !mapCenter) return
     leafletMap.current.flyTo([mapCenter.lat, mapCenter.lng], 13)
